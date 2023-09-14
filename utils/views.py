@@ -100,5 +100,6 @@ def force_refresh_view(page: ft.Page, route_name: str):
     """
     page.route = "/"
     page.update()
+    time.sleep(0.05)
     page.route = route_name
     page.update()

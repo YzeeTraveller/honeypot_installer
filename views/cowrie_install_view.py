@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 # @filename: cowrie
 # @date: 2023/9/14
+import json
 import os.path
 import time
 import traceback
@@ -24,6 +25,17 @@ from utils.views import (
 _ROUTE = '/install/cowrie'
 _IMAGE_NAME = 'cowrie/cowrie:latest'
 _CONTAINER_NAME = 'cowire'
+
+
+def load_configs(page: ft.Page):
+    """
+    load_configs
+    :return:
+    """
+    ret = {"PORT_MAPPING": page.client_storage.get("PORT_MAPPING")}
+    for entry in page.client_storage.get_keys("COWRIE_"):
+        ret[entry] = page.client_storage.get(entry)
+    return ret
 
 
 def start_event(event: ft.ControlEvent):
@@ -107,6 +119,7 @@ def parse_configure_file(e: ft.FilePickerResultEvent):
                 )
             ]
         )
+        page.client_storage.clear()
 
         path = os.path.join('uploads', uf.name)
         with open(path, 'r', encoding='utf-8') as f:
@@ -114,11 +127,12 @@ def parse_configure_file(e: ft.FilePickerResultEvent):
         for entry in c:
             value = c[entry]
             page.client_storage.set(entry, value)
+        page.update()
 
-    # force_refresh_view(page, _ROUTE)
+    force_refresh_view(page, _ROUTE)
 
 
-def configure(event):
+def select_configure(event):
     """
     选择配置
     :return:
@@ -168,6 +182,27 @@ def cowrire_install_view(page: ft.Page):
         margin=20,
     )
 
+    config_title = ft.Row(
+        controls=[
+            ft.Text(
+                'Configurations',
+                size=30,
+                weight=ft.FontWeight.BOLD
+            ),
+        ],
+        alignment=ft.MainAxisAlignment.CENTER,
+    )
+    config_str = json.dumps(load_configs(page))
+    config_container = ft.Container(
+        content=ft.Text(
+            config_str,
+            size=20,
+        ),
+        alignment=ft.alignment.center,
+        margin=30,
+        bgcolor=ft.colors.GREY_50
+    )
+
     # 检查是否已安装和运行
     container_exists, container = check_is_alive(_CONTAINER_NAME)
     container_id = container.id if container else None
@@ -182,9 +217,15 @@ def cowrire_install_view(page: ft.Page):
     if attach_command:
         controls.append(attach_command)
 
+    controls.extend([
+        ft.Divider(),
+        config_title,
+        config_container,
+    ])
+
     # 添加停止按钮、配置按钮、安装按钮
     events = {
-        'configure': configure,
+        'configure': select_configure,
         'stop': stop_event,
         'start': start_event,
         'export_log': None,
