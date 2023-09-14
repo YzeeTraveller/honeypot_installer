@@ -62,6 +62,7 @@ def generate_container_op_buttons(alive: bool, events: dict):
                 text="Configure",
                 on_click=events['configure'],
                 disabled=alive,
+                tooltip='Select configuration file.'
             ),
             ft.VerticalDivider(),
             ft.ElevatedButton(
@@ -76,6 +77,13 @@ def generate_container_op_buttons(alive: bool, events: dict):
                 text="Start",
                 disabled=alive,
                 on_click=events['start'],
+            ),
+            ft.VerticalDivider(),
+            ft.ElevatedButton(
+                icon=ft.icons.BOOK,
+                text="Export Log",
+                disabled=not alive,
+                on_click=events['export_log'],
             ),
         ],
         alignment=ft.MainAxisAlignment.CENTER,

@@ -2,12 +2,14 @@
 # -*- coding: utf-8 -*-
 # @filename: cowrie
 # @date: 2023/9/14
-
+import os.path
 import time
+import traceback
 
 import flet as ft
 
 import docker
+import yaml
 
 from utils.docker import (
     check_is_alive,
@@ -19,7 +21,6 @@ from utils.views import (
     generate_container_op_buttons,
 )
 
-
 _ROUTE = '/install/cowrie'
 _IMAGE_NAME = 'cowrie/cowrie:latest'
 _CONTAINER_NAME = 'cowire'
@@ -30,7 +31,7 @@ def start_event(event: ft.ControlEvent):
     安装运行
     :return:
     """
-    page = event.page
+    page: ft.Page = event.page
 
     this: ft.ElevatedButton = event.control
     this.disabled = True
@@ -39,12 +40,21 @@ def start_event(event: ft.ControlEvent):
     client = docker.from_env()
     container_name = _CONTAINER_NAME
     image_name = _IMAGE_NAME
-    port_bindings = {2222: 2222}
-    constainer = client.containers.run(
+
+    # 端口配置
+    port_bindings = page.client_storage.get("PORT_MAPPING")
+
+    # 传递蜜罐配置（如有）
+    env_params = {}
+    for entry in page.client_storage.get_keys("COWRIE_"):
+        env_params[entry] = page.client_storage.get(entry)
+
+    container = client.containers.run(
         image=image_name,
         name=container_name,
         detach=True,
         ports=port_bindings,
+        environment=env_params,
     )
 
     this.disabled = False
@@ -52,7 +62,7 @@ def start_event(event: ft.ControlEvent):
     time.sleep(1)
     force_refresh_view(page, _ROUTE)
 
-    return constainer.id
+    return container.id
 
 
 def stop_event(event):
@@ -77,6 +87,37 @@ def stop_event(event):
     force_refresh_view(page, _ROUTE)
 
 
+def parse_configure_file(e: ft.FilePickerResultEvent):
+    """
+    parse_configure_file
+    :param e:
+    :return:
+    """
+    page = e.page
+    control = e.control
+
+    if control.result is not None and control.result.files:
+        uf = control.result.files[0]
+        upload_url = page.get_upload_url(uf.name, 30)
+        control.upload(
+            [
+                ft.FilePickerUploadFile(
+                    uf.name,
+                    upload_url=upload_url,
+                )
+            ]
+        )
+
+        path = os.path.join('uploads', uf.name)
+        with open(path, 'r', encoding='utf-8') as f:
+            c = yaml.load(f, Loader=yaml.FullLoader)
+        for entry in c:
+            value = c[entry]
+            page.client_storage.set(entry, value)
+
+    # force_refresh_view(page, _ROUTE)
+
+
 def configure(event):
     """
     选择配置
@@ -84,15 +125,13 @@ def configure(event):
     """
     page = event.page
 
-    this = event.control
-    this.disabled = True
+    pick_files_dialog = ft.FilePicker(
+        on_result=parse_configure_file
+    )
+    page.overlay.append(pick_files_dialog)
     page.update()
-
-    time.sleep(1)
-
-    this.disabled = False
+    pick_files_dialog.pick_files('select configure file', allow_multiple=False)
     page.update()
-    force_refresh_view(page, _ROUTE)
 
 
 def cowrire_install_view(page: ft.Page):
@@ -148,6 +187,7 @@ def cowrire_install_view(page: ft.Page):
         'configure': configure,
         'stop': stop_event,
         'start': start_event,
+        'export_log': None,
     }
     op_buttons = generate_container_op_buttons(container_exists, events)
     controls.append(ft.Divider())

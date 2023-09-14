@@ -12,13 +12,16 @@ source:
 3. https://github.com/DinoTools/dionaea
 
 """
+import os.path
 
 import flet as ft
+import yaml
 
 from views.cowrie_install_view import cowrire_install_view
-
 from utils.docker import is_docker_installed
 
+
+DEFAULT_CONFIGS_DIR = 'default_configs'
 
 SOURCE_CONFIG = {
     'cowrie': {
@@ -34,6 +37,11 @@ SOURCE_CONFIG = {
         'url': 'https://github.com/DinoTools/dionaea'
     }
 }
+
+UPLOAD_DIR = 'uploads'
+
+if not os.path.exists(UPLOAD_DIR):
+    os.makedirs(UPLOAD_DIR)
 
 
 def generate_menu_button(source_name: str, disabled: bool):
@@ -148,7 +156,30 @@ def index_view(page: ft.Page):
     )
 
 
+def init_default_configs(page: ft.Page):
+    """
+    init_default_configs
+    :return:
+    """
+    for key in SOURCE_CONFIG.keys():
+        config_path = os.path.join(DEFAULT_CONFIGS_DIR, f"{key}.yaml")
+        if not os.path.exists(config_path):
+            continue
+        with open(config_path, 'r', encoding='utf-8') as f:
+            c = yaml.load(f, Loader=yaml.FullLoader)
+        for entry in c:
+            value = c[entry]
+            page.client_storage.set(entry, value)
+
+
 def run(page: ft.Page):
+    """
+    runq
+    :param page:
+    :return:
+    """
+    init_default_configs(page)
+
     page.title = "Routes Example"
 
     def route_change(route: ft.RouteChangeEvent):
@@ -202,7 +233,11 @@ def main():
     main
     :return:
     """
-    ft.app(target=run, view=ft.AppView.WEB_BROWSER)
+    ft.app(
+        target=run,
+        view=ft.AppView.WEB_BROWSER,
+        upload_dir='uploads',
+    )
 
 
 if __name__ == '__main__':
