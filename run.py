@@ -15,6 +15,10 @@ source:
 
 import flet as ft
 
+from views.cowrie_install_view import cowrire_install_view
+
+from utils.docker import is_docker_installed
+
 
 SOURCE_CONFIG = {
     'cowrie': {
@@ -32,7 +36,7 @@ SOURCE_CONFIG = {
 }
 
 
-def generate_menu_button(source_name: str):
+def generate_menu_button(source_name: str, disabled: bool):
     """
     生成菜单按钮
     :return:
@@ -53,7 +57,8 @@ def generate_menu_button(source_name: str):
             ft.ElevatedButton(
                 text=text,
                 tooltip=tooltip,
-                on_click=_on_click
+                on_click=_on_click,
+                disabled=disabled
             )
         ],
         alignment=ft.MainAxisAlignment.CENTER,
@@ -87,6 +92,38 @@ def index_view(page: ft.Page):
         alignment=ft.MainAxisAlignment.CENTER,
     )
 
+    # docker是否安装
+    docker_installed = is_docker_installed()
+    docker_installed_row = ft.Row(
+        controls=[
+            ft.Icon('check_circle', color='green'),
+            ft.Text(
+                'Docker has installed.',
+                size=15,
+            )
+        ],
+        alignment=ft.MainAxisAlignment.CENTER,
+    )
+    if not docker_installed:
+        docker_installed_row = ft.Row(
+            controls=[
+                ft.Icon('cancel', color='red'),
+                ft.Text(
+                    'Docker is not installed, Please read the document to install docker: ',
+                    size=15,
+                ),
+                ft.ElevatedButton(
+                    text='Document',
+                    style=ft.ButtonStyle(
+                        shape=ft.ContinuousRectangleBorder(radius=30),
+                        color=ft.colors.GREEN_800
+                    ),
+                    url='https://docs.docker.com/engine/install/',
+                )
+            ],
+            alignment=ft.MainAxisAlignment.CENTER,
+        )
+
     # 菜单栏
     menu_text = 'Select One Program to install'
     menu_text_row = ft.Row(
@@ -102,9 +139,10 @@ def index_view(page: ft.Page):
             author_row,
             ft.Divider(),
             menu_text_row,
-            generate_menu_button('cowrie'),
-            generate_menu_button('honeyd'),
-            generate_menu_button('dionaea'),
+            docker_installed_row,
+            generate_menu_button('cowrie', not docker_installed),
+            generate_menu_button('honeyd', not docker_installed),
+            generate_menu_button('dionaea', not docker_installed)
         ],
         spacing=30
     )
@@ -135,6 +173,11 @@ def run(page: ft.Page):
             pass
         elif page.route == '/install/cowrie':
             pass
+        elif page.route == '/install/honeyd':
+            pass
+        elif page.route == '/install/dionaea':
+            pass
+
         page.update()
 
     def view_pop(view):
