@@ -41,7 +41,7 @@ def generate_menu_button(source_name: str, disabled: bool):
     生成菜单按钮
     :return:
     """
-    def _on_click(event):
+    def _on_click(event: ft.ControlEvent):
         """
         on_click
         :param event:
@@ -174,7 +174,7 @@ def run(page: ft.Page):
         elif page.route == '/install/cowrie':
             page.views.append(
                 ft.View(
-                    "/",
+                    "/install/cowrie",
                     [
                         cowrire_install_view(page)
                     ],
