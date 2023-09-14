@@ -172,7 +172,14 @@ def run(page: ft.Page):
         if page.route == "/":
             pass
         elif page.route == '/install/cowrie':
-            pass
+            page.views.append(
+                ft.View(
+                    "/",
+                    [
+                        cowrire_install_view(page)
+                    ],
+                )
+            )
         elif page.route == '/install/honeyd':
             pass
         elif page.route == '/install/dionaea':
