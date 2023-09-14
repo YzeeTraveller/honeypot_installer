@@ -44,3 +44,17 @@ def stop_and_remove_container(container):
     if container and container.status == 'running':
         container.stop()
         container.remove()
+
+
+def export_files(container, src: str, target: str):
+    """
+    export_files 导出文件
+    :param container:
+    :param dir_path:
+    :return:
+    """
+    if container and container.status == 'running':
+        with open(target, "wb") as host_file:
+            bits, stat = container.get_archive(src)
+            for chunk in bits:
+                host_file.write(chunk)

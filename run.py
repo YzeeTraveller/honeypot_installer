@@ -236,6 +236,7 @@ def main():
     ft.app(
         target=run,
         view=ft.AppView.WEB_BROWSER,
+        assets_dir='assets',
         upload_dir='uploads',
     )
 

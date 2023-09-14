@@ -100,6 +100,38 @@ def force_refresh_view(page: ft.Page, route_name: str):
     """
     page.route = "/"
     page.update()
-    time.sleep(0.05)
+    time.sleep(0.1)
     page.route = route_name
+    page.update()
+
+
+def alert(page: ft.Page, title: str, content: str):
+    """
+    aleat
+    :param content:
+    :param title:
+    :param page:
+    :return:
+    """
+    def _close_dialog(e):
+        """
+        close dialog
+        :return:
+        """
+        dialog.open = False
+        page.update()
+
+    dialog = ft.AlertDialog(
+        title=ft.Text(
+            title,
+        ),
+        content=ft.Text(
+            content
+        ),
+        actions=[
+            ft.TextButton("Yes", on_click=_close_dialog),
+        ],
+    )
+    page.dialog = dialog
+    dialog.open = True
     page.update()

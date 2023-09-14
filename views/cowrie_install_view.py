@@ -14,9 +14,14 @@ import yaml
 
 from utils.docker import (
     check_is_alive,
+    export_files,
     stop_and_remove_container,
 )
+from utils.project import (
+    get_project_root,
+)
 from utils.views import (
+    alert,
     force_refresh_view,
     generate_container_alive_status,
     generate_container_op_buttons,
@@ -128,6 +133,7 @@ def parse_configure_file(e: ft.FilePickerResultEvent):
             value = c[entry]
             page.client_storage.set(entry, value)
         page.update()
+        os.remove(path)
 
     force_refresh_view(page, _ROUTE)
 
@@ -146,6 +152,62 @@ def select_configure(event):
     page.update()
     pick_files_dialog.pick_files('select configure file', allow_multiple=False)
     page.update()
+
+
+def export_log(event):
+    """
+    export log 导出日志
+    :param event:
+    :return:
+    """
+    page: ft.Page = event.page
+
+    this: ft.ElevatedButton = event.control
+
+    project_root = get_project_root()
+    assets_dir = os.path.join(project_root, 'assets')
+    log_path = os.path.join(assets_dir, 'cowrie.json')
+    src_path = '/cowrie/cowrie-git/var/log/cowrie/cowrie.json'
+    exists, container = check_is_alive(_CONTAINER_NAME)
+    if container:
+        this.disabled = True
+        page.update()
+        export_files(container, src_path, log_path)
+        this.disabled = False
+        page.update()
+
+    if os.path.join(log_path):
+        alert(page, 'success', f'export log success, path: {log_path}')
+    else:
+        alert(page, 'error', f'export log failed')
+
+
+def install_other_tools(event):
+    """
+    install_other_tools 安装其他工具
+    :param event:
+    :return:
+    """
+    telnet_plugin = ft.ElevatedButton(
+        icon=ft.icons.PHONELINK_SETUP,
+        text="Install Telnet Plugin",
+        on_click=None,
+    )
+
+    mysql_export_plugin = ft.ElevatedButton(
+        icon=ft.icons.PHONELINK_SETUP,
+        text="Install MySQL Export Plugin",
+        on_click=None,
+    )
+
+    return ft.Row(
+        controls=[
+            telnet_plugin,
+            mysql_export_plugin,
+        ],
+        spacing=10,
+        alignment=ft.MainAxisAlignment.CENTER,
+    )
 
 
 def cowrire_install_view(page: ft.Page):
@@ -224,20 +286,45 @@ def cowrire_install_view(page: ft.Page):
     ])
 
     # 添加停止按钮、配置按钮、安装按钮
+    op_title = ft.Row(
+        controls=[
+            ft.Text(
+                'Operations',
+                size=30,
+                weight=ft.FontWeight.BOLD
+            ),
+        ],
+        alignment=ft.MainAxisAlignment.CENTER,
+    )
     events = {
         'configure': select_configure,
         'stop': stop_event,
         'start': start_event,
-        'export_log': None,
+        'export_log': export_log,
     }
     op_buttons = generate_container_op_buttons(container_exists, events)
     controls.append(ft.Divider())
+    controls.append(op_title)
     controls.append(op_buttons)
     controls.append(ft.Divider())
 
+    # 添加安装其他功能按钮
+    install_title = ft.Row(
+        controls=[
+            ft.Text(
+                'Plugins install',
+                size=30,
+                weight=ft.FontWeight.BOLD
+            ),
+        ],
+        alignment=ft.MainAxisAlignment.CENTER,
+    )
+    controls.append(install_title)
+    controls.append(install_other_tools(page))
+
     return ft.Column(
         controls=controls,
-        spacing=10,
+        spacing=40,
     )
 
 
