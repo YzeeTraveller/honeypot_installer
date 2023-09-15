@@ -50,7 +50,7 @@ services:
     image: thinkst/opencanary
     build:
       context: .
-      dockerfile: Dockerfile.latest
+      dockerfile: Dockerfile
 
   stable: # docker-compose up --build -d stable
     <<: *common

@@ -2,8 +2,10 @@
 # -*- coding: utf-8 -*-
 # @filename: docker
 # @date: 2023/9/14
-
+import io
+import os
 import subprocess
+import tarfile
 
 import docker
 
@@ -74,17 +76,38 @@ def export_files(container, src: str, target: str):
                 host_file.write(chunk)
 
 
-def start_container(image_name: str, container_name: str, force_remove: bool=True, **kwargs):
+def push_files(container, src: str, target: str):
+    """
+    push_files
+    :param container:
+    :param src:
+    :param target:
+    :return:
+    """
+    if container and container.status == 'running':
+        stream = io.BytesIO()
+        with tarfile.open(fileobj=stream, mode='w|') as tar, open(src, 'rb') as f:
+            info = tar.gettarinfo(fileobj=f)
+            info.name = os.path.basename(src)
+            tar.addfile(info, f)
+        container.put_archive(target, stream.getvalue())
+
+
+def start_container(image_name: str, container_name: str, force_remove: bool = False, reload: bool = True, **kwargs):
     """
     拉取镜像
     :return:
     """
     client = docker.from_env()
-    if force_remove:
-        _, container = check_is_alive(container_name)
-        if container and container.status == 'running':
+    _, container = check_is_alive(container_name)
+    if container and container.status == 'running':
+        if force_remove:
             container.stop()
             container.remove()
+        if reload:
+            container.restart()
+            return
+
     container = client.containers.run(
         image=image_name,
         name=container_name,
@@ -94,13 +117,13 @@ def start_container(image_name: str, container_name: str, force_remove: bool=Tru
     return container
 
 
-def build_mysql_container():
+def build_redis_container():
     """
     build_mysql_container
     :return:
     """
-    container_name = 'mysql'
-    image_name = 'mysql:lastest'
+    container_name = 'redis'
+    image_name = 'redis'
 
     _, container = check_is_alive(container_name)
     if not container:

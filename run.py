@@ -14,7 +14,7 @@ from views.opencanary_install_view import opencanary_install_view
 from utils.docker import is_docker_installed
 
 
-DEFAULT_CONFIGS_DIR = 'default_configs'
+DEFAULT_CONFIGS_DIR = 'environment_configs'
 
 SOURCE_CONFIG = {
     'cowrie': {

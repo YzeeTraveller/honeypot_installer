@@ -83,7 +83,7 @@ def generate_container_op_buttons(alive: bool, events: dict, image_has_built: bo
             ft.ElevatedButton(
                 icon=ft.icons.START,
                 text="Start",
-                disabled=not (image_has_built or alive),
+                disabled=not image_has_built or alive,
                 on_click=events['start'],
             ),
             ft.VerticalDivider(),

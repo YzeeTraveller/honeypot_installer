@@ -30,9 +30,8 @@ ENV PATH=${COWRIE_HOME}/cowrie-env/bin:${PATH}
 ENV PYTHONPATH=${COWRIE_HOME}/cowrie-git/src
 ENV PYTHONUNBUFFERED=1
 
-ENTRYPOINT [ "sleep 1000" ]
 
-#ENTRYPOINT [ "/usr/bin/twistd" ]
-#CMD [ "-n", "--umask=0022", "--pidfile=", "cowrie" ]
+ENTRYPOINT [ "/usr/local/bin/twistd" ]
+CMD [ "-n", "--umask=0022", "--pidfile=", "cowrie" ]
 
 EXPOSE 2222 2223

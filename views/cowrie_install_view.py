@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # @filename: cowrie
 # @date: 2023/9/14
-
+import configparser
 import json
 import os.path
 import time
@@ -11,9 +11,7 @@ import flet as ft
 import yaml
 
 from utils.docker import *
-from utils.project import (
-    get_project_root,
-)
+from utils.project import *
 from utils.views import (
     alert,
     force_refresh_view,
@@ -45,6 +43,15 @@ def load_configs(page: ft.Page):
     return ret
 
 
+def load_plugin_config() -> configparser.ConfigParser:
+    """
+    load_plugin_config
+    :return:
+    """
+    plugin_file = os.path.join('plugin_configs', 'cowrie.cfg')
+    return read_ini_file(plugin_file)
+
+
 def start_event(event: ft.ControlEvent):
     """
     安装运行
@@ -57,11 +64,12 @@ def start_event(event: ft.ControlEvent):
     page.update()
 
     # 端口配置
-    port_bindings = page.client_storage.get("PORT_MAPPING")
+    configs = load_configs(page)
+    port_bindings = configs.get("PORT_MAPPING")
 
-    # 传递蜜罐配置（如有）
+    # 传递容器环境变量
     env_params = {}
-    for entry in page.client_storage.get_keys("COWRIE_"):
+    for entry in configs.keys():
         env_params[entry] = page.client_storage.get(entry)
 
     container = start_container(
@@ -127,9 +135,12 @@ def parse_configure_file(e: ft.FilePickerResultEvent):
         path = os.path.join('uploads', uf.name)
         with open(path, 'r', encoding='utf-8') as f:
             c = yaml.load(f, Loader=yaml.FullLoader)
+
+        settings = {}
         for entry in c:
             value = c[entry]
-            page.client_storage.set(entry, value)
+            settings[entry] = value
+        page.client_storage.set(_IMAGE_NAME, settings)
         page.update()
         os.remove(path)
 
@@ -187,18 +198,28 @@ def install_other_tools(event):
     :return:
     """
 
-    alive, _ = check_is_alive(_CONTAINER_NAME)
+    overite_cfg = os.path.join('plugin_overwrite_configs', 'cowrie.cfg.dist')
+    alive, container = check_is_alive(_CONTAINER_NAME)
 
     def _install_telnet_plugin(event):
         _p: ft.Page = event.page
-        _p.client_storage.set("COWRIE_TELNET_ENABLED", "yes")
-        _port_mapping = _p.client_storage.get("PORT_MAPPING")
+
+        settings = _p.client_storage.get(_CONTAINER_NAME)
+        settings["COWRIE_TELNET_ENABLED"] = "yes"
+        _port_mapping = settings.get("PORT_MAPPING")
         _port_mapping["2223"] = 2223
-        _p.client_storage.set("PORT_MAPPING", _port_mapping)
+        _p.client_storage.set(_CONTAINER_NAME, _port_mapping)
         _envs = load_configs(_p)
-        start_container(_IMAGE_NAME, _CONTAINER_NAME, force_remove=True, ports=_port_mapping, environment=_envs)
+
+        pc = load_plugin_config()
+        pc.set('telnet', 'enabled', 'yes')
+        with open(overite_cfg, 'w', encoding='utf-8') as f:
+            pc.write(f)
+        push_files(container, overite_cfg, '/cowrie/cowrie-git/etc/')
+
+        start_container(_IMAGE_NAME, _CONTAINER_NAME, reload=True, ports=_port_mapping, environment=_envs)
         time.sleep(1)
-        force_refresh_view(_p, _ROUTE)
+        alert(_p, 'success', f'install telnet plugin success')
 
     telnet_plugin = ft.ElevatedButton(
         icon=ft.icons.PHONELINK_SETUP,
@@ -207,14 +228,28 @@ def install_other_tools(event):
         disabled=not alive,
     )
 
-    mysql_export_plugin = ft.ElevatedButton(
+    def _install_redis_plugin(_e):
+        _, redis_container = check_is_alive('redis')
+        if not redis_container:
+            return
+        ip = redis_container.attrs['NetworkSettings']['Networks']['bridge']['IPAddress']
+        pc = load_plugin_config()
+        pc.set('output_redis', 'enabled', 'yes')
+        pc.set('output_redis', 'host', ip)
+        with open(overite_cfg, 'w', encoding='utf-8') as f:
+            pc.write(f)
+        push_files(container, overite_cfg, '/cowrie/cowrie-git/etc/')
+        start_container(_IMAGE_NAME, _CONTAINER_NAME, reload=True)
+        alert(_e.page, 'success', f'install redis plugin success')
+
+    redis_export_plugin = ft.ElevatedButton(
         icon=ft.icons.PHONELINK_SETUP,
-        text="Install MySQL Export Plugin",
-        on_click=None,
+        text="Install Redis Export Plugin",
+        on_click=_install_redis_plugin,
         disabled=not alive,
     )
 
-    es_export_plugin = ft.ElevatedButton(
+    squid_plugin = ft.ElevatedButton(
         icon=ft.icons.PHONELINK_SETUP,
         text="Install Squid TCP Tunnel Plugin",
         on_click=None,
@@ -224,7 +259,8 @@ def install_other_tools(event):
     return ft.Row(
         controls=[
             telnet_plugin,
-            mysql_export_plugin,
+            redis_export_plugin,
+            squid_plugin,
         ],
         spacing=10,
         alignment=ft.MainAxisAlignment.CENTER,
@@ -240,6 +276,8 @@ def build_image_event(event):
     page: ft.Page = event.page
 
     build_image(_BASE_IMAGE_DIR, _IMAGE_NAME)
+    build_redis_container()
+
     alert(page, 'success', f'build image success')
 
 
@@ -294,7 +332,7 @@ def cowrire_install_view(page: ft.Page):
     config_title = ft.Row(
         controls=[
             ft.Text(
-                'Configurations',
+                'Environment variables',
                 size=30,
                 weight=ft.FontWeight.BOLD
             ),

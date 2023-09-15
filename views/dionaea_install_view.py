@@ -53,11 +53,12 @@ def start_event(event: ft.ControlEvent):
     page.update()
 
     # 端口配置
-    port_bindings = page.client_storage.get("PORT_MAPPING")
+    configs = load_configs(page)
+    port_bindings = configs.get("PORT_MAPPING")
 
     # 传递蜜罐配置（如有）
     env_params = {}
-    for entry in page.client_storage.get_keys("COWRIE_"):
+    for entry in configs.keys():
         env_params[entry] = page.client_storage.get(entry)
 
     container = start_container(
@@ -123,13 +124,16 @@ def parse_configure_file(e: ft.FilePickerResultEvent):
         path = os.path.join('uploads', uf.name)
         with open(path, 'r', encoding='utf-8') as f:
             c = yaml.load(f, Loader=yaml.FullLoader)
+        settings = {}
         for entry in c:
             value = c[entry]
-            page.client_storage.set(entry, value)
+            settings[entry] = value
+        page.client_storage.set(_IMAGE_NAME, settings)
         page.update()
         os.remove(path)
 
     force_refresh_view(page, _ROUTE)
+
 
 
 def select_configure(event):

@@ -1,11 +1,11 @@
 FROM python:3.10-buster
 
 # Download cache lists and install minimal versions
-RUN apt-get update && apt-get -yq install --no-install-recommends \
-	# Required linux dependencies
-	sudo vim build-essential libssl-dev libffi-dev python-dev libpcap-dev && \
-	# Remove cache lists and clean up anything not needed to minimize image size
-	apt-get autoremove -yq && apt-get clean && rm -rf /var/lib/apt/lists/*
+#RUN apt-get update && apt-get -yq install --no-install-recommends \
+#	 Required linux dependencies
+#	sudo vim build-essential libssl-dev libffi-dev python-dev libpcap-dev && \
+#	 Remove cache lists and clean up anything not needed to minimize image size
+#	apt-get autoremove -yq && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Create and set the working directory
 WORKDIR /opencanary
@@ -16,8 +16,8 @@ COPY requirements.txt setup.py ./
 COPY bin /opencanary/bin
 
 # Install the required dependencies
-RUN pip install -r requirements.txt
-RUN pip install scapy pcapy-ng
+RUN pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
+RUN pip install scapy pcapy-ng -i https://mirrors.aliyun.com/pypi/simple/
 
 # Copy in the latest version
 COPY opencanary ./opencanary

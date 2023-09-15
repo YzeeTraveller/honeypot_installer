@@ -6,6 +6,8 @@
 
 import os
 
+import configparser
+
 
 def get_project_root():
     """
@@ -13,3 +15,14 @@ def get_project_root():
     :return:
     """
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def read_ini_file(src: str) -> configparser.ConfigParser:
+    """
+    read_ini_file
+    :param src:
+    :return:
+    """
+    config = configparser.ConfigParser()
+    config.read(src)
+    return config
