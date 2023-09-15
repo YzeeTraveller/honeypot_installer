@@ -3,21 +3,14 @@
 # @filename: run
 # @date: 2023/9/14
 
-"""
-
-source:
-
-1. https://github.com/cowrie/cowrie
-2. https://github.com/DataSoft/Honeyd
-3. https://github.com/DinoTools/dionaea
-
-"""
 import os.path
 
 import flet as ft
 import yaml
 
 from views.cowrie_install_view import cowrire_install_view
+from views.dionaea_install_view import dionaea_install_view
+from views.opencanary_install_view import opencanary_install_view
 from utils.docker import is_docker_installed
 
 
@@ -28,9 +21,9 @@ SOURCE_CONFIG = {
         'name': 'Cowrie',
         'url': 'https://github.com/cowrie/cowrie'
     },
-    'honeyd': {
-        'name': 'Honeyd',
-        'url': 'https://github.com/DataSoft/Honeyd',
+    'opencanary': {
+        'name': 'opencanary',
+        'url': 'https://github.com/thinkst/opencanary#configuring-opencanary',
     },
     'dionaea': {
         'name': 'Dionaea',
@@ -149,7 +142,7 @@ def index_view(page: ft.Page):
             menu_text_row,
             docker_installed_row,
             generate_menu_button('cowrie', not docker_installed),
-            generate_menu_button('honeyd', not docker_installed),
+            generate_menu_button('opencanary', not docker_installed),
             generate_menu_button('dionaea', not docker_installed)
         ],
         spacing=30
@@ -167,9 +160,11 @@ def init_default_configs(page: ft.Page):
             continue
         with open(config_path, 'r', encoding='utf-8') as f:
             c = yaml.load(f, Loader=yaml.FullLoader)
+        settings = {}
         for entry in c:
             value = c[entry]
-            page.client_storage.set(entry, value)
+            settings[entry] = value
+        page.client_storage.set(key, settings)
 
 
 def run(page: ft.Page):
@@ -211,10 +206,24 @@ def run(page: ft.Page):
                     ],
                 )
             )
-        elif page.route == '/install/honeyd':
-            pass
+        elif page.route == '/install/opencanary':
+            page.views.append(
+                ft.View(
+                    "/install/opencanary",
+                    [
+                        opencanary_install_view(page)
+                    ],
+                )
+            )
         elif page.route == '/install/dionaea':
-            pass
+            page.views.append(
+                ft.View(
+                    "/install/dionaea",
+                    [
+                        dionaea_install_view(page)
+                    ],
+                )
+            )
 
         page.update()
 

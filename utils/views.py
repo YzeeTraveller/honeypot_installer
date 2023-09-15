@@ -48,7 +48,7 @@ def generate_container_alive_status(alive: bool, container_id: str):
     return alive_status, attach_command
 
 
-def generate_container_op_buttons(alive: bool, events: dict):
+def generate_container_op_buttons(alive: bool, events: dict, image_has_built: bool):
     """
     generate_container_op_buttons 生成操作按钮组
     :param alive:
@@ -58,10 +58,18 @@ def generate_container_op_buttons(alive: bool, events: dict):
         controls=[
             ft.VerticalDivider(),
             ft.ElevatedButton(
+                icon=ft.icons.BUILD,
+                text="Build",
+                on_click=events['build'],
+                disabled=image_has_built,
+                tooltip='Build'
+            ),
+            ft.VerticalDivider(),
+            ft.ElevatedButton(
                 icon=ft.icons.FILE_UPLOAD,
                 text="Configure",
                 on_click=events['configure'],
-                disabled=alive,
+                disabled=not (image_has_built or alive),
                 tooltip='Select configuration file.'
             ),
             ft.VerticalDivider(),
@@ -75,7 +83,7 @@ def generate_container_op_buttons(alive: bool, events: dict):
             ft.ElevatedButton(
                 icon=ft.icons.START,
                 text="Start",
-                disabled=alive,
+                disabled=not (image_has_built or alive),
                 on_click=events['start'],
             ),
             ft.VerticalDivider(),
@@ -121,6 +129,8 @@ def alert(page: ft.Page, title: str, content: str):
         dialog.open = False
         page.update()
 
+        force_refresh_view(page, page.route)
+
     dialog = ft.AlertDialog(
         title=ft.Text(
             title,
@@ -135,3 +145,28 @@ def alert(page: ft.Page, title: str, content: str):
     page.dialog = dialog
     dialog.open = True
     page.update()
+
+
+def wait_build_image(page: ft.Page, work_dir: str, tag: str):
+    """
+    wait_build_image
+    :param page:
+    :param work_dir:
+    :param tag:
+    :return:
+    """
+    pr = ft.ProgressRing(width=16, height=16, stroke_widt=2)
+    page.add(
+        ft.Text("Waitting."),
+        ft.Row([pr, ft.Text("Wait for the completion...")]),
+        ft.Text("Indeterminate cicrular progress", style="headlineSmall"),
+        ft.Column(
+            [ft.ProgressRing(), ft.Text("I'm going to run for ages...")],
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        ),
+    )
+
+    for i in range(0, 101):
+        pr.value = i * 0.01
+        time.sleep(0.1)
+        page.update()

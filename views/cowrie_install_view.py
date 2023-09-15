@@ -2,21 +2,15 @@
 # -*- coding: utf-8 -*-
 # @filename: cowrie
 # @date: 2023/9/14
+
 import json
 import os.path
 import time
-import traceback
 
 import flet as ft
-
-import docker
 import yaml
 
-from utils.docker import (
-    check_is_alive,
-    export_files,
-    stop_and_remove_container,
-)
+from utils.docker import *
 from utils.project import (
     get_project_root,
 )
@@ -28,8 +22,9 @@ from utils.views import (
 )
 
 _ROUTE = '/install/cowrie'
-_IMAGE_NAME = 'cowrie/cowrie:latest'
-_CONTAINER_NAME = 'cowire'
+_IMAGE_NAME = 'cowrie:latest'
+_CONTAINER_NAME = 'cowrie'
+_BASE_IMAGE_DIR = os.path.join('vendor', 'cowrie')
 
 
 def load_configs(page: ft.Page):
@@ -37,9 +32,16 @@ def load_configs(page: ft.Page):
     load_configs
     :return:
     """
-    ret = {"PORT_MAPPING": page.client_storage.get("PORT_MAPPING")}
+    settings = page.client_storage.get(_CONTAINER_NAME)
+    ret = {"PORT_MAPPING": settings.get("PORT_MAPPING")}
     for entry in page.client_storage.get_keys("COWRIE_"):
-        ret[entry] = page.client_storage.get(entry)
+        ret[entry] = settings.get(entry)
+    _, container = check_is_alive(_CONTAINER_NAME)
+    if container:
+        for entry in container.attrs['Config']['Env']:
+            if entry.startswith("COWRIE_"):
+                k, v = entry.split("=")
+                ret[k] = v
     return ret
 
 
@@ -54,10 +56,6 @@ def start_event(event: ft.ControlEvent):
     this.disabled = True
     page.update()
 
-    client = docker.from_env()
-    container_name = _CONTAINER_NAME
-    image_name = _IMAGE_NAME
-
     # 端口配置
     port_bindings = page.client_storage.get("PORT_MAPPING")
 
@@ -66,10 +64,10 @@ def start_event(event: ft.ControlEvent):
     for entry in page.client_storage.get_keys("COWRIE_"):
         env_params[entry] = page.client_storage.get(entry)
 
-    container = client.containers.run(
-        image=image_name,
-        name=container_name,
-        detach=True,
+    container = start_container(
+        _IMAGE_NAME,
+        _CONTAINER_NAME,
+        force_remove=True,
         ports=port_bindings,
         environment=env_params,
     )
@@ -188,16 +186,39 @@ def install_other_tools(event):
     :param event:
     :return:
     """
+
+    alive, _ = check_is_alive(_CONTAINER_NAME)
+
+    def _install_telnet_plugin(event):
+        _p: ft.Page = event.page
+        _p.client_storage.set("COWRIE_TELNET_ENABLED", "yes")
+        _port_mapping = _p.client_storage.get("PORT_MAPPING")
+        _port_mapping["2223"] = 2223
+        _p.client_storage.set("PORT_MAPPING", _port_mapping)
+        _envs = load_configs(_p)
+        start_container(_IMAGE_NAME, _CONTAINER_NAME, force_remove=True, ports=_port_mapping, environment=_envs)
+        time.sleep(1)
+        force_refresh_view(_p, _ROUTE)
+
     telnet_plugin = ft.ElevatedButton(
         icon=ft.icons.PHONELINK_SETUP,
         text="Install Telnet Plugin",
-        on_click=None,
+        on_click=_install_telnet_plugin,
+        disabled=not alive,
     )
 
     mysql_export_plugin = ft.ElevatedButton(
         icon=ft.icons.PHONELINK_SETUP,
         text="Install MySQL Export Plugin",
         on_click=None,
+        disabled=not alive,
+    )
+
+    es_export_plugin = ft.ElevatedButton(
+        icon=ft.icons.PHONELINK_SETUP,
+        text="Install Squid TCP Tunnel Plugin",
+        on_click=None,
+        disabled=not alive,
     )
 
     return ft.Row(
@@ -208,6 +229,18 @@ def install_other_tools(event):
         spacing=10,
         alignment=ft.MainAxisAlignment.CENTER,
     )
+
+
+def build_image_event(event):
+    """
+    build_image
+    :param event:
+    :return:
+    """
+    page: ft.Page = event.page
+
+    build_image(_BASE_IMAGE_DIR, _IMAGE_NAME)
+    alert(page, 'success', f'build image success')
 
 
 def cowrire_install_view(page: ft.Page):
@@ -244,6 +277,20 @@ def cowrire_install_view(page: ft.Page):
         margin=20,
     )
 
+    # 基础镜像是否已构建
+    base_image_exists = check_image_has_built(_IMAGE_NAME)
+    image_built_msg = 'Base image has been built.' if base_image_exists else 'Base image has not been built.'
+    built_status = ft.Row(
+        controls=[
+            ft.Icon(ft.icons.CHECK_CIRCLE, color='green' if base_image_exists else 'red'),
+            ft.Text(
+                image_built_msg,
+                size=15,
+            )
+        ],
+        alignment=ft.MainAxisAlignment.CENTER,
+    )
+
     config_title = ft.Row(
         controls=[
             ft.Text(
@@ -274,6 +321,8 @@ def cowrire_install_view(page: ft.Page):
         title_row,
         desc_container,
         ft.Divider(),
+        built_status,
+        ft.Divider(),
         alive_status,
     ]
     if attach_command:
@@ -297,12 +346,13 @@ def cowrire_install_view(page: ft.Page):
         alignment=ft.MainAxisAlignment.CENTER,
     )
     events = {
+        'build': build_image_event,
         'configure': select_configure,
         'stop': stop_event,
         'start': start_event,
         'export_log': export_log,
     }
-    op_buttons = generate_container_op_buttons(container_exists, events)
+    op_buttons = generate_container_op_buttons(container_exists, events, base_image_exists)
     controls.append(ft.Divider())
     controls.append(op_title)
     controls.append(op_buttons)
