@@ -85,11 +85,13 @@ listen_endpoints = tcp:2222:interface=0.0.0.0
 sftp_enabled = true
 forwarding = true
 forward_redirect = false
-forward_tunnel = false
+forward_tunnel = yes
 auth_keyboard_interactive_enabled = false
+forward_tunnel_80 = 127.0.0.1:3128
+forward_tunnel_443 = 127.0.0.1:3128
 
 [telnet]
-enabled = yes
+enabled = false
 listen_endpoints = tcp:2223:interface=0.0.0.0
 
 [output_xmpp]

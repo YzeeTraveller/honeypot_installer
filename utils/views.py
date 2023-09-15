@@ -64,14 +64,14 @@ def generate_container_op_buttons(alive: bool, events: dict, image_has_built: bo
                 disabled=image_has_built,
                 tooltip='Build'
             ),
-            ft.VerticalDivider(),
-            ft.ElevatedButton(
-                icon=ft.icons.FILE_UPLOAD,
-                text="Configure",
-                on_click=events['configure'],
-                disabled=not (image_has_built or alive),
-                tooltip='Select configuration file.'
-            ),
+            # ft.VerticalDivider(),
+            # ft.ElevatedButton(
+            #     icon=ft.icons.FILE_UPLOAD,
+            #     text="Configure",
+            #     on_click=events['configure'],
+            #     disabled=not (image_has_built or alive),
+            #     tooltip='Select configuration file.'
+            # ),
             ft.VerticalDivider(),
             ft.ElevatedButton(
                 icon=ft.icons.PAUSE_CIRCLE_FILLED_ROUNDED,
@@ -145,28 +145,3 @@ def alert(page: ft.Page, title: str, content: str):
     page.dialog = dialog
     dialog.open = True
     page.update()
-
-
-def wait_build_image(page: ft.Page, work_dir: str, tag: str):
-    """
-    wait_build_image
-    :param page:
-    :param work_dir:
-    :param tag:
-    :return:
-    """
-    pr = ft.ProgressRing(width=16, height=16, stroke_widt=2)
-    page.add(
-        ft.Text("Waitting."),
-        ft.Row([pr, ft.Text("Wait for the completion...")]),
-        ft.Text("Indeterminate cicrular progress", style="headlineSmall"),
-        ft.Column(
-            [ft.ProgressRing(), ft.Text("I'm going to run for ages...")],
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-        ),
-    )
-
-    for i in range(0, 101):
-        pr.value = i * 0.01
-        time.sleep(0.1)
-        page.update()

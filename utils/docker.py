@@ -143,3 +143,25 @@ def build_image(work_dir: str, tag: str):
     client = docker.from_env()
     client.images.build(path=work_dir, tag=tag)
     return True
+
+
+def apt_install(container, packages: list):
+    """
+    apt_install
+    :param container:
+    :param packages:
+    :return:
+    """
+    if container and container.status == 'running':
+        container.exec_run(f"apt-get install -y {' '.join(packages)}")
+
+
+def exec_command(container, command: str):
+    """
+    exec_command
+    :param container:
+    :param command:
+    :return:
+    """
+    if container and container.status == 'running':
+        container.exec_run(command)

@@ -12,12 +12,7 @@ import yaml
 
 from utils.docker import *
 from utils.project import *
-from utils.views import (
-    alert,
-    force_refresh_view,
-    generate_container_alive_status,
-    generate_container_op_buttons,
-)
+from utils.views import *
 
 _ROUTE = '/install/cowrie'
 _IMAGE_NAME = 'cowrie:latest'
@@ -110,57 +105,57 @@ def stop_event(event):
     force_refresh_view(page, _ROUTE)
 
 
-def parse_configure_file(e: ft.FilePickerResultEvent):
-    """
-    parse_configure_file
-    :param e:
-    :return:
-    """
-    page = e.page
-    control = e.control
-
-    if control.result is not None and control.result.files:
-        uf = control.result.files[0]
-        upload_url = page.get_upload_url(uf.name, 30)
-        control.upload(
-            [
-                ft.FilePickerUploadFile(
-                    uf.name,
-                    upload_url=upload_url,
-                )
-            ]
-        )
-        page.client_storage.clear()
-
-        path = os.path.join('uploads', uf.name)
-        with open(path, 'r', encoding='utf-8') as f:
-            c = yaml.load(f, Loader=yaml.FullLoader)
-
-        settings = {}
-        for entry in c:
-            value = c[entry]
-            settings[entry] = value
-        page.client_storage.set(_IMAGE_NAME, settings)
-        page.update()
-        os.remove(path)
-
-    force_refresh_view(page, _ROUTE)
-
-
-def select_configure(event):
-    """
-    选择配置
-    :return:
-    """
-    page = event.page
-
-    pick_files_dialog = ft.FilePicker(
-        on_result=parse_configure_file
-    )
-    page.overlay.append(pick_files_dialog)
-    page.update()
-    pick_files_dialog.pick_files('select configure file', allow_multiple=False)
-    page.update()
+# def parse_configure_file(e: ft.FilePickerResultEvent):
+#     """
+#     parse_configure_file
+#     :param e:
+#     :return:
+#     """
+#     page = e.page
+#     control = e.control
+#
+#     if control.result is not None and control.result.files:
+#         uf = control.result.files[0]
+#         upload_url = page.get_upload_url(uf.name, 30)
+#         control.upload(
+#             [
+#                 ft.FilePickerUploadFile(
+#                     uf.name,
+#                     upload_url=upload_url,
+#                 )
+#             ]
+#         )
+#         page.client_storage.clear()
+#
+#         path = os.path.join('uploads', uf.name)
+#         with open(path, 'r', encoding='utf-8') as f:
+#             c = yaml.load(f, Loader=yaml.FullLoader)
+#
+#         settings = {}
+#         for entry in c:
+#             value = c[entry]
+#             settings[entry] = value
+#         page.client_storage.set(_IMAGE_NAME, settings)
+#         page.update()
+#         os.remove(path)
+#
+#     force_refresh_view(page, _ROUTE)
+#
+#
+# def select_configure(event):
+#     """
+#     选择配置
+#     :return:
+#     """
+#     page = event.page
+#
+#     pick_files_dialog = ft.FilePicker(
+#         on_result=parse_configure_file
+#     )
+#     page.overlay.append(pick_files_dialog)
+#     page.update()
+#     pick_files_dialog.pick_files('select configure file', allow_multiple=False)
+#     page.update()
 
 
 def export_log(event):
@@ -229,6 +224,7 @@ def install_other_tools(event):
     )
 
     def _install_redis_plugin(_e):
+
         _, redis_container = check_is_alive('redis')
         if not redis_container:
             return
@@ -249,10 +245,23 @@ def install_other_tools(event):
         disabled=not alive,
     )
 
+    def _install_squid_tunnel_plugin(_e):
+        pc = load_plugin_config()
+        pc.set('ssh', 'forward_tunnel', 'yes')
+        pc.set('ssh', 'forward_tunnel_80', '127.0.0.1:3128')
+        pc.set('ssh', 'forward_tunnel_443', '127.0.0.1:3128')
+        apt_install(container, ['squid'])
+        exec_command(container, 'squid')
+        with open(overite_cfg, 'w', encoding='utf-8') as f:
+            pc.write(f)
+        push_files(container, overite_cfg, '/cowrie/cowrie-git/etc/')
+        start_container(_IMAGE_NAME, _CONTAINER_NAME, reload=True)
+        alert(_e.page, 'success', f'install squid plugin success')
+
     squid_plugin = ft.ElevatedButton(
         icon=ft.icons.PHONELINK_SETUP,
         text="Install Squid TCP Tunnel Plugin",
-        on_click=None,
+        on_click=_install_squid_tunnel_plugin,
         disabled=not alive,
     )
 
@@ -385,7 +394,7 @@ def cowrire_install_view(page: ft.Page):
     )
     events = {
         'build': build_image_event,
-        'configure': select_configure,
+        # 'configure': select_configure,
         'stop': stop_event,
         'start': start_event,
         'export_log': export_log,
