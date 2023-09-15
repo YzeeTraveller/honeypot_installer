@@ -6,6 +6,7 @@ import io
 import os
 import subprocess
 import tarfile
+import traceback
 
 import docker
 
@@ -156,12 +157,31 @@ def apt_install(container, packages: list):
         container.exec_run(f"apt-get install -y {' '.join(packages)}")
 
 
-def exec_command(container, command: str):
+def exec_command(container, command: str, tty=False):
     """
     exec_command
+    :param tty:
     :param container:
     :param command:
     :return:
     """
     if container and container.status == 'running':
-        container.exec_run(command)
+        container.exec_run(command, tty=tty, detach=tty)
+
+
+def exec_command_output(container, command):
+    """
+    exec_command_output
+    :param container:
+    :param command:
+    :return:
+    """
+    try:
+        exec_response = container.exec_run(cmd=["/bin/sh", "-c", command], stdout=True, stderr=False, detach=False)
+        output = exec_response.output.decode("utf-8")
+        lines = output.splitlines()
+        return lines
+    except:
+        traceback.print_exc()
+        return []
+

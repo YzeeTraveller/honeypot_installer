@@ -10,7 +10,7 @@ import yaml
 
 from views.cowrie_install_view import cowrire_install_view
 from views.dionaea_install_view import dionaea_install_view
-from views.opencanary_install_view import opencanary_install_view
+from views.docker_ssh_honey_install_view import docker_ssh_honey_install_view
 from utils.docker import is_docker_installed
 
 
@@ -21,9 +21,9 @@ SOURCE_CONFIG = {
         'name': 'Cowrie',
         'url': 'https://github.com/cowrie/cowrie'
     },
-    'opencanary': {
-        'name': 'opencanary',
-        'url': 'https://github.com/thinkst/opencanary#configuring-opencanary',
+    'ssh_honey': {
+        'name': 'ssh_honey',
+        'url': 'https://github.com/random-robbie/docker-ssh-honey',
     },
     'dionaea': {
         'name': 'Dionaea',
@@ -142,8 +142,8 @@ def index_view(page: ft.Page):
             menu_text_row,
             docker_installed_row,
             generate_menu_button('cowrie', not docker_installed),
-            generate_menu_button('opencanary', not docker_installed),
-            generate_menu_button('dionaea', not docker_installed)
+            generate_menu_button('dionaea', not docker_installed),
+            generate_menu_button('ssh_honey', not docker_installed),
         ],
         spacing=30
     )
@@ -207,12 +207,12 @@ def run(page: ft.Page):
                     ],
                 )
             )
-        elif page.route == '/install/opencanary':
+        elif page.route == '/install/ssh_honey':
             page.views.append(
                 ft.View(
-                    "/install/opencanary",
+                    "/install/ssh_honey",
                     [
-                        opencanary_install_view(page)
+                        docker_ssh_honey_install_view(page)
                     ],
                 )
             )

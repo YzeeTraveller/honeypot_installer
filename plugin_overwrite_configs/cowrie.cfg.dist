@@ -85,10 +85,8 @@ listen_endpoints = tcp:2222:interface=0.0.0.0
 sftp_enabled = true
 forwarding = true
 forward_redirect = false
-forward_tunnel = yes
+forward_tunnel = false
 auth_keyboard_interactive_enabled = false
-forward_tunnel_80 = 127.0.0.1:3128
-forward_tunnel_443 = 127.0.0.1:3128
 
 [telnet]
 enabled = false
@@ -224,8 +222,8 @@ port = 9092
 topic = cowrie
 
 [output_redis]
-enabled = false
-host = 127.0.0.1
+enabled = yes
+host = 172.17.0.2
 port = 6379
 db = 0
 keyname = cowrie

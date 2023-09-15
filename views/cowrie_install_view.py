@@ -421,7 +421,7 @@ def cowrire_install_view(page: ft.Page):
     install_title = ft.Row(
         controls=[
             ft.Text(
-                'Plugins install',
+                'Others',
                 size=30,
                 weight=ft.FontWeight.BOLD
             ),

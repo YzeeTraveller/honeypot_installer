@@ -185,45 +185,24 @@ def install_other_tools(event):
         disabled=not alive,
     )
 
-    def _install_json_log_plugin(event):
+    def _install_ftp_plugin(event):
         _p: ft.Page = event.page
 
-        exec_command(container, 'cp /opt/dionaea/etc/dionaea/ihandlers-available/log_json.yaml '
-                                '/opt/dionaea/etc/dionaea/ihandlers-enabled/log_json.yaml')
-        exec_command(container, 'chmod 777 /opt/dionaea/etc/dionaea/ihandlers-enabled/log_json.yaml')
+        _c = read_yaml_file(os.path.join(plugin_config_dir, 'dionaea_ftp.yaml'))
+        overwrite_path = os.path.join(plugin_overwrite_dir, 'ftp.yaml')
+        with open(overwrite_path, 'w') as f:
+            yaml.dump(_c, f)
+        # overwrite plugin config
+        push_files(container, overwrite_path, '/opt/dionaea/etc/dionaea/services-available')
         # restart services
         start_container(_IMAGE_NAME, _CONTAINER_NAME, reload=True)
         # pull files
-        alert(_p, 'success', 'install log json plugin success.')
+        alert(_p, 'success', 'install ftp plugin success.')
 
-    json_log_plugin = ft.ElevatedButton(
+    ftp_install_plugin = ft.ElevatedButton(
         icon=ft.icons.PHONELINK_SETUP,
-        text="Install Json Log Plugin",
-        on_click=_install_json_log_plugin,
-        disabled=not alive,
-    )
-
-    def _export_json_log_file(event):
-        """
-
-        :param event:
-        :return:
-        """
-        page = event.page
-        assets_json_log_file_path = os.path.join(get_project_root(), 'assets', 'dionaea.json')
-        db_ori_path = '/opt/dionaea/var/lib/dionaea/dionaea.json'
-        success = True
-        try:
-            export_files(container, db_ori_path, assets_json_log_file_path)
-        except:
-            success = False
-        msg = f'export success, file path: {assets_json_log_file_path}' if success else 'export failed.'
-        alert(page, 'export result', msg)
-
-    export_json_log_plugin = ft.ElevatedButton(
-        icon=ft.icons.IMPORT_EXPORT,
-        text="Export Plugin Json Log",
-        on_click=_export_json_log_file,
+        text="Install ftp Plugin",
+        on_click=_install_ftp_plugin,
         disabled=not alive,
     )
 
@@ -231,8 +210,7 @@ def install_other_tools(event):
         controls=[
             log_db_plugin,
             export_db_plugin,
-            json_log_plugin,
-            export_json_log_plugin,
+            ftp_install_plugin,
         ],
         spacing=10,
         alignment=ft.MainAxisAlignment.CENTER,
@@ -432,7 +410,7 @@ def dionaea_install_view(page: ft.Page):
     install_title = ft.Row(
         controls=[
             ft.Text(
-                'Plugins install',
+                'Others',
                 size=30,
                 weight=ft.FontWeight.BOLD
             ),

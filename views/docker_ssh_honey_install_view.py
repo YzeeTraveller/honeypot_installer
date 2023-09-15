@@ -5,6 +5,8 @@
 
 import json
 import os.path
+import random
+import re
 import time
 import traceback
 
@@ -17,17 +19,12 @@ from utils.docker import *
 from utils.project import (
     get_project_root,
 )
-from utils.views import (
-    alert,
-    force_refresh_view,
-    generate_container_alive_status,
-    generate_container_op_buttons,
-)
+from utils.views import *
 
-_ROUTE = '/install/opencanary'
-_IMAGE_NAME = 'dustyfresh/opencanary'
-_CONTAINER_NAME = 'opencanary'
-_BASE_IMAGE_DIR = os.path.join('vendor', 'opencanary')
+_ROUTE = '/install/ssh_honey'
+_IMAGE_NAME = 'txt3rob/docker-ssh-honey'
+_CONTAINER_NAME = 'ssh_honey'
+_BASE_IMAGE_DIR = os.path.join('vendor', 'ssh_honey')
 
 
 def load_configs(page: ft.Page):
@@ -170,8 +167,8 @@ def export_log(event):
 
     project_root = get_project_root()
     assets_dir = os.path.join(project_root, 'assets')
-    log_path = os.path.join(assets_dir, 'cowrie.json')
-    src_path = '/cowrie/cowrie-git/var/log/cowrie/cowrie.json'
+    log_path = os.path.join(assets_dir, 'ssh-honeypot.log')
+    src_path = '/ssh-honeypot/ssh-honeypot.log'
     exists, container = check_is_alive(_CONTAINER_NAME)
     if container:
         this.disabled = True
@@ -193,38 +190,99 @@ def install_other_tools(event):
     :return:
     """
 
-    alive, _ = check_is_alive(_CONTAINER_NAME)
+    alive, container = check_is_alive(_CONTAINER_NAME)
 
-    def _install_telnet_plugin(event):
-        _p: ft.Page = event.page
-        _p.client_storage.set("COWRIE_TELNET_ENABLED", "yes")
-        _port_mapping = _p.client_storage.get("PORT_MAPPING")
-        _port_mapping["2223"] = 2223
-        _p.client_storage.set("PORT_MAPPING", _port_mapping)
-        _envs = load_configs(_p)
-        start_container(_IMAGE_NAME, _CONTAINER_NAME, force_remove=True, ports=_port_mapping, environment=_envs)
-        force_refresh_view(_p, _ROUTE)
+    new_ports = [20020, 20028]
 
-    telnet_plugin = ft.ElevatedButton(
-        icon=ft.icons.PHONELINK_SETUP,
-        text="Install Telnet Plugin",
-        on_click=_install_telnet_plugin,
-        disabled=not alive,
-    )
+    def _add_new_ssh_service(e):
+        """
+        _add_new_ssh_service
+        :param e:
+        :return:
+        """
+        _p: ft.Page = e.page
+        settings = load_configs(_p)
 
-    mysql_export_plugin = ft.ElevatedButton(
-        icon=ft.icons.PHONELINK_SETUP,
-        text="Install MySQL Export Plugin",
-        on_click=None,
-        disabled=not alive,
-    )
+        port_bindings = settings.get("PORT_MAPPING")
 
-    return ft.Row(
-        controls=[
-            telnet_plugin,
-            mysql_export_plugin,
+        port = dropdown.value.split(':')
+        internal_port = int(port[0])
+        host_port = int(port[1])
+
+        command = f'/bin/ssh-honeypot -u root -i 1 -p {internal_port} -l ssh-honeypot.log &'
+        exec_command(container, command, tty=True)
+
+        port_bindings[internal_port] = host_port
+        settings["PORT_MAPPING"] = port_bindings
+
+        _p.client_storage.set(_CONTAINER_NAME, settings)
+        alert(_p, 'success', f'add new ssh service success, port: ssh -p {host_port} root@127.0.01')
+
+    activte_ports = []
+    for line in exec_command_output(container, 'ps -ef | grep ssh-honeypot'):
+        match = re.findall('-p (\d+) -', line)
+        if match:
+            port = int(match[0])
+            activte_ports.append(port)
+
+    dropdown = ft.Dropdown(
+        label="Port",
+        hint_text="Choose your new ssh port",
+        options=[
+            ft.dropdown.Option(
+                str(i) + ":" + str(i),
+            ) for i in range(new_ports[0], new_ports[1]) if i not in activte_ports
         ],
-        spacing=10,
+        autofocus=True,
+    )
+
+    add_new_ssh_service_btn = ft.ElevatedButton(
+        icon=ft.icons.ADD,
+        text="Add new ssh service",
+        disabled=not alive,
+        on_click=_add_new_ssh_service,
+    )
+
+    add_service_group = ft.Row(
+        controls=[
+            dropdown,
+            add_new_ssh_service_btn,
+        ],
+        spacing=15,
+        alignment=ft.MainAxisAlignment.CENTER,
+    )
+
+    connect_ssh_board = [
+        ft.Row(
+            controls=[
+                ft.ElevatedButton(
+                    f'ssh -p {port} root@127.0.01',
+                    on_click=lambda e: e.page.set_clipboard(f'ssh -p {port} root@127.0.01') or short_alert(e.page, 'success', 'copy success')
+                )
+            ],
+            alignment=ft.MainAxisAlignment.CENTER,
+        ) for port in activte_ports if port != 22
+    ]
+
+    controls = [
+        add_service_group,
+        ft.Row(
+            controls=[
+                ft.Text(
+                    value="Active ssh service",
+                    size=20,
+                    weight=ft.FontWeight.BOLD,
+                    text_align=ft.TextAlign.CENTER,
+                )
+            ],
+            alignment=ft.MainAxisAlignment.CENTER,
+        )
+    ]
+    controls.extend(connect_ssh_board)
+
+    return ft.Column(
+        controls=controls,
+        spacing=30,
         alignment=ft.MainAxisAlignment.CENTER,
     )
 
@@ -237,17 +295,19 @@ def build_image_event(event):
     """
     page: ft.Page = event.page
 
-    build_image(_BASE_IMAGE_DIR, _IMAGE_NAME)
+    envs = load_configs(page)
+
+    start_container(_IMAGE_NAME, _CONTAINER_NAME, force_remove=True, environment=envs)
     alert(page, 'success', f'build image success')
 
 
-def opencanary_install_view(page: ft.Page):
+def docker_ssh_honey_install_view(page: ft.Page):
     """
     安装页面
     :param page:
     :return:
     """
-    title = 'opencanary'
+    title = 'docker-ssh-honey'
     page.title = title
 
     # 标题
@@ -265,10 +325,8 @@ def opencanary_install_view(page: ft.Page):
     # 描述
     desc_container = ft.Container(
         content=ft.Text(
-            "OpenCanary is a daemon that runs canary services, which trigger alerts when (ab)used. The alerts can be "
-            "sent to a variety of sources, including syslog, emails and a companion daemon opencanary-correlator. The "
-            "Correlator coalesces multiple related events (eg. individual brute-force login attempts) into a single "
-            "alert sent via email or SMS.",
+            "This program listens for incoming ssh connections and logs the ip address, username, and password used."
+            " This was written to gather rudimentary intelligence on brute force attacks.",
             size=20,
         ),
         alignment=ft.alignment.center,
@@ -281,7 +339,7 @@ def opencanary_install_view(page: ft.Page):
                 'Document',
                 icon=ft.icons.HELP,
                 on_click=lambda event: event.page.launch_url(
-                    'https://opencanary.readthedocs.io/en/latest/starting/opencanary.html')
+                    'https://github.com/random-robbie/docker-ssh-honey')
             )
         ],
         alignment=ft.MainAxisAlignment.CENTER,
@@ -290,7 +348,7 @@ def opencanary_install_view(page: ft.Page):
     config_title = ft.Row(
         controls=[
             ft.Text(
-                'Configurations',
+                'Environment variables',
                 size=30,
                 weight=ft.FontWeight.BOLD
             ),
@@ -372,7 +430,7 @@ def opencanary_install_view(page: ft.Page):
     install_title = ft.Row(
         controls=[
             ft.Text(
-                'Plugins install',
+                'Others',
                 size=30,
                 weight=ft.FontWeight.BOLD
             ),
