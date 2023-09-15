@@ -1,0 +1,3 @@
+- config:
+    url: sqlite:////opt/dionaea/var/lib/dionaea/dionaea.sqlite
+  name: log_db_sql

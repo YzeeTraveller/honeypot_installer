@@ -176,6 +176,7 @@ def run(page: ft.Page):
     init_default_configs(page)
 
     page.title = "Routes Example"
+    page.auto_scroll = True
 
     def route_change(route: ft.RouteChangeEvent):
         """

@@ -64,14 +64,14 @@ def generate_container_op_buttons(alive: bool, events: dict, image_has_built: bo
                 disabled=image_has_built,
                 tooltip='Build'
             ),
-            # ft.VerticalDivider(),
-            # ft.ElevatedButton(
-            #     icon=ft.icons.FILE_UPLOAD,
-            #     text="Configure",
-            #     on_click=events['configure'],
-            #     disabled=not (image_has_built or alive),
-            #     tooltip='Select configuration file.'
-            # ),
+            ft.VerticalDivider(),
+            ft.ElevatedButton(
+                icon=ft.icons.FILE_UPLOAD,
+                text="Configure Env Params",
+                on_click=events['configure'],
+                disabled=not (image_has_built or alive),
+                tooltip='Select configuration file.'
+            ),
             ft.VerticalDivider(),
             ft.ElevatedButton(
                 icon=ft.icons.PAUSE_CIRCLE_FILLED_ROUNDED,

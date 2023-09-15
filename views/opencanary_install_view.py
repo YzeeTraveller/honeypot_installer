@@ -35,9 +35,16 @@ def load_configs(page: ft.Page):
     load_configs
     :return:
     """
-    ret = {"PORT_MAPPING": page.client_storage.get("PORT_MAPPING")}
-    for entry in page.client_storage.get_keys("COWRIE_"):
-        ret[entry] = page.client_storage.get(entry)
+    settings = page.client_storage.get(_CONTAINER_NAME)
+    ret = {"PORT_MAPPING": settings.get("PORT_MAPPING")}
+    for entry in settings.keys():
+        ret[entry] = settings.get(entry)
+    _, container = check_is_alive(_CONTAINER_NAME)
+    if container:
+        for entry in container.attrs['Config']['Env']:
+            if len(entry.split("=")) == 2:
+                k, v = entry.split("=")
+                ret[k] = v
     return ret
 
 
@@ -119,26 +126,25 @@ def parse_configure_file(e: ft.FilePickerResultEvent):
                 )
             ]
         )
-        page.client_storage.clear()
 
         path = os.path.join('uploads', uf.name)
         with open(path, 'r', encoding='utf-8') as f:
             c = yaml.load(f, Loader=yaml.FullLoader)
+
         settings = {}
         for entry in c:
             value = c[entry]
+            page.client_storage.set(entry, value)
             settings[entry] = value
-        page.client_storage.set(_IMAGE_NAME, settings)
+        page.client_storage.set(_CONTAINER_NAME, settings)
         page.update()
-        os.remove(path)
 
     force_refresh_view(page, _ROUTE)
 
 
-
-def select_configure(event):
+def select_env_configure(event):
     """
-    选择配置
+    选择环境相关配置
     :return:
     """
     page = event.page
@@ -148,7 +154,7 @@ def select_configure(event):
     )
     page.overlay.append(pick_files_dialog)
     page.update()
-    pick_files_dialog.pick_files('select configure file', allow_multiple=False)
+    pick_files_dialog.pick_files('select env config file', allow_multiple=False)
     page.update()
 
 
@@ -269,6 +275,18 @@ def opencanary_install_view(page: ft.Page):
         margin=20,
     )
 
+    docuement_row = ft.Row(
+        controls=[
+            ft.ElevatedButton(
+                'Document',
+                icon=ft.icons.HELP,
+                on_click=lambda event: event.page.launch_url(
+                    'https://opencanary.readthedocs.io/en/latest/starting/opencanary.html')
+            )
+        ],
+        alignment=ft.MainAxisAlignment.CENTER,
+    )
+
     config_title = ft.Row(
         controls=[
             ft.Text(
@@ -312,6 +330,7 @@ def opencanary_install_view(page: ft.Page):
     controls = [
         title_row,
         desc_container,
+        docuement_row,
         built_status,
         ft.Divider(),
         alive_status,
@@ -338,7 +357,7 @@ def opencanary_install_view(page: ft.Page):
     )
     events = {
         'build': build_image_event,
-        'configure': select_configure,
+        'configure': select_env_configure,
         'stop': stop_event,
         'start': start_event,
         'export_log': export_log,
@@ -366,6 +385,8 @@ def opencanary_install_view(page: ft.Page):
     return ft.Column(
         controls=controls,
         spacing=40,
+        scroll=ft.ScrollMode.AUTO,
+        expand=True,
     )
 
 

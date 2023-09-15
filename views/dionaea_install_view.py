@@ -14,15 +14,8 @@ import docker
 import yaml
 
 from utils.docker import *
-from utils.project import (
-    get_project_root,
-)
-from utils.views import (
-    alert,
-    force_refresh_view,
-    generate_container_alive_status,
-    generate_container_op_buttons,
-)
+from utils.project import *
+from utils.views import *
 
 _ROUTE = '/install/dionaea'
 _IMAGE_NAME = 'dinotools/dionaea'
@@ -35,9 +28,16 @@ def load_configs(page: ft.Page):
     load_configs
     :return:
     """
-    ret = {"PORT_MAPPING": page.client_storage.get("PORT_MAPPING")}
-    for entry in page.client_storage.get_keys("COWRIE_"):
-        ret[entry] = page.client_storage.get(entry)
+    settings = page.client_storage.get(_CONTAINER_NAME)
+    ret = {"PORT_MAPPING": settings.get("PORT_MAPPING")}
+    for entry in settings.keys():
+        ret[entry] = settings.get(entry)
+    _, container = check_is_alive(_CONTAINER_NAME)
+    if container:
+        for entry in container.attrs['Config']['Env']:
+            if len(entry.split("=")) == 2:
+                k, v = entry.split("=")
+                ret[k] = v
     return ret
 
 
@@ -56,7 +56,7 @@ def start_event(event: ft.ControlEvent):
     configs = load_configs(page)
     port_bindings = configs.get("PORT_MAPPING")
 
-    # 传递蜜罐配置（如有）
+    # 传递环境变量
     env_params = {}
     for entry in configs.keys():
         env_params[entry] = page.client_storage.get(entry)
@@ -71,8 +71,8 @@ def start_event(event: ft.ControlEvent):
 
     this.disabled = False
     page.update()
-    time.sleep(1)
-    force_refresh_view(page, _ROUTE)
+
+    alert(page, 'success', f'start success, container id: {container.id}')
 
     return container.id
 
@@ -97,59 +97,6 @@ def stop_event(event):
     page.update()
     time.sleep(1)
     force_refresh_view(page, _ROUTE)
-
-
-def parse_configure_file(e: ft.FilePickerResultEvent):
-    """
-    parse_configure_file
-    :param e:
-    :return:
-    """
-    page = e.page
-    control = e.control
-
-    if control.result is not None and control.result.files:
-        uf = control.result.files[0]
-        upload_url = page.get_upload_url(uf.name, 30)
-        control.upload(
-            [
-                ft.FilePickerUploadFile(
-                    uf.name,
-                    upload_url=upload_url,
-                )
-            ]
-        )
-        page.client_storage.clear()
-
-        path = os.path.join('uploads', uf.name)
-        with open(path, 'r', encoding='utf-8') as f:
-            c = yaml.load(f, Loader=yaml.FullLoader)
-        settings = {}
-        for entry in c:
-            value = c[entry]
-            settings[entry] = value
-        page.client_storage.set(_IMAGE_NAME, settings)
-        page.update()
-        os.remove(path)
-
-    force_refresh_view(page, _ROUTE)
-
-
-
-def select_configure(event):
-    """
-    选择配置
-    :return:
-    """
-    page = event.page
-
-    pick_files_dialog = ft.FilePicker(
-        on_result=parse_configure_file
-    )
-    page.overlay.append(pick_files_dialog)
-    page.update()
-    pick_files_dialog.pick_files('select configure file', allow_multiple=False)
-    page.update()
 
 
 def export_log(event):
@@ -187,36 +134,105 @@ def install_other_tools(event):
     :return:
     """
 
-    alive, _ = check_is_alive(_CONTAINER_NAME)
+    plugin_overwrite_dir = os.path.join(get_project_root(), 'plugin_overwrite_configs')
+    plugin_config_dir = os.path.join(get_project_root(), 'plugin_configs')
+    alive, container = check_is_alive(_CONTAINER_NAME)
 
-    def _install_telnet_plugin(event):
+    def _install_log_db_plugin(event):
         _p: ft.Page = event.page
-        _p.client_storage.set("COWRIE_TELNET_ENABLED", "yes")
-        _port_mapping = _p.client_storage.get("PORT_MAPPING")
-        _port_mapping["2223"] = 2223
-        _p.client_storage.set("PORT_MAPPING", _port_mapping)
-        _envs = load_configs(_p)
-        start_container(_IMAGE_NAME, _CONTAINER_NAME, force_remove=True, ports=_port_mapping, environment=_envs)
-        force_refresh_view(_p, _ROUTE)
 
-    telnet_plugin = ft.ElevatedButton(
+        _c = read_yaml_file(os.path.join(plugin_config_dir, 'dionaea_db_sql.yaml'))
+        sqlite_path = 'sqlite:////opt/dionaea/var/lib/dionaea/dionaea.sqlite'
+        _c[0]['config']['url'] = sqlite_path
+        overwrite_path = os.path.join(plugin_overwrite_dir, 'log_db_sql.yaml')
+        with open(overwrite_path, 'w') as f:
+            yaml.dump(_c, f)
+        # overwrite plugin config
+        push_files(container, overwrite_path, '/opt/dionaea/etc/dionaea/ihandlers-available')
+        # restart services
+        start_container(_IMAGE_NAME, _CONTAINER_NAME, reload=True)
+        # pull files
+        alert(_p, 'success', 'install log db plugin success.')
+
+    log_db_plugin = ft.ElevatedButton(
         icon=ft.icons.PHONELINK_SETUP,
-        text="Install Telnet Plugin",
-        on_click=_install_telnet_plugin,
+        text="Install Log Db Plugin",
+        on_click=_install_log_db_plugin,
         disabled=not alive,
     )
 
-    mysql_export_plugin = ft.ElevatedButton(
+    def _export_db_file(event):
+        """
+
+        :param event:
+        :return:
+        """
+        page = event.page
+        assets_db_file_path = os.path.join(get_project_root(), 'assets', 'dionaea.sqlite')
+        db_ori_path = '/opt/dionaea/var/lib/dionaea/dionaea.sqlite'
+        success = True
+        try:
+            export_files(container, db_ori_path, assets_db_file_path)
+        except:
+            success = False
+        msg = f'export success, file path: {assets_db_file_path}' if success else 'export failed.'
+        alert(page, 'export result', msg)
+
+    export_db_plugin = ft.ElevatedButton(
+        icon=ft.icons.IMPORT_EXPORT,
+        text="Export Plugin Db Log",
+        on_click=_export_db_file,
+        disabled=not alive,
+    )
+
+    def _install_json_log_plugin(event):
+        _p: ft.Page = event.page
+
+        exec_command(container, 'cp /opt/dionaea/etc/dionaea/ihandlers-available/log_json.yaml '
+                                '/opt/dionaea/etc/dionaea/ihandlers-enabled/log_json.yaml')
+        exec_command(container, 'chmod 777 /opt/dionaea/etc/dionaea/ihandlers-enabled/log_json.yaml')
+        # restart services
+        start_container(_IMAGE_NAME, _CONTAINER_NAME, reload=True)
+        # pull files
+        alert(_p, 'success', 'install log json plugin success.')
+
+    json_log_plugin = ft.ElevatedButton(
         icon=ft.icons.PHONELINK_SETUP,
-        text="Install MySQL Export Plugin",
-        on_click=None,
+        text="Install Json Log Plugin",
+        on_click=_install_json_log_plugin,
+        disabled=not alive,
+    )
+
+    def _export_json_log_file(event):
+        """
+
+        :param event:
+        :return:
+        """
+        page = event.page
+        assets_json_log_file_path = os.path.join(get_project_root(), 'assets', 'dionaea.json')
+        db_ori_path = '/opt/dionaea/var/lib/dionaea/dionaea.json'
+        success = True
+        try:
+            export_files(container, db_ori_path, assets_json_log_file_path)
+        except:
+            success = False
+        msg = f'export success, file path: {assets_json_log_file_path}' if success else 'export failed.'
+        alert(page, 'export result', msg)
+
+    export_json_log_plugin = ft.ElevatedButton(
+        icon=ft.icons.IMPORT_EXPORT,
+        text="Export Plugin Json Log",
+        on_click=_export_json_log_file,
         disabled=not alive,
     )
 
     return ft.Row(
         controls=[
-            telnet_plugin,
-            mysql_export_plugin,
+            log_db_plugin,
+            export_db_plugin,
+            json_log_plugin,
+            export_json_log_plugin,
         ],
         spacing=10,
         alignment=ft.MainAxisAlignment.CENTER,
@@ -233,6 +249,58 @@ def build_image_event(event):
 
     build_image(_BASE_IMAGE_DIR, _IMAGE_NAME)
     alert(page, 'success', f'build image success')
+
+
+def parse_configure_file(e: ft.FilePickerResultEvent):
+    """
+    parse_configure_file
+    :param e:
+    :return:
+    """
+    page = e.page
+    control = e.control
+
+    if control.result is not None and control.result.files:
+        uf = control.result.files[0]
+        upload_url = page.get_upload_url(uf.name, 30)
+        control.upload(
+            [
+                ft.FilePickerUploadFile(
+                    uf.name,
+                    upload_url=upload_url,
+                )
+            ]
+        )
+
+        path = os.path.join('uploads', uf.name)
+        with open(path, 'r', encoding='utf-8') as f:
+            c = yaml.load(f, Loader=yaml.FullLoader)
+
+        settings = {}
+        for entry in c:
+            value = c[entry]
+            page.client_storage.set(entry, value)
+            settings[entry] = value
+        page.client_storage.set(_CONTAINER_NAME, settings)
+        page.update()
+
+    force_refresh_view(page, _ROUTE)
+
+
+def select_env_configure(event):
+    """
+    选择环境相关配置
+    :return:
+    """
+    page = event.page
+
+    pick_files_dialog = ft.FilePicker(
+        on_result=parse_configure_file
+    )
+    page.overlay.append(pick_files_dialog)
+    page.update()
+    pick_files_dialog.pick_files('select env config file', allow_multiple=False)
+    page.update()
 
 
 def dionaea_install_view(page: ft.Page):
@@ -270,7 +338,7 @@ def dionaea_install_view(page: ft.Page):
     config_title = ft.Row(
         controls=[
             ft.Text(
-                'Configurations',
+                'Environment Variables',
                 size=30,
                 weight=ft.FontWeight.BOLD
             ),
@@ -286,6 +354,17 @@ def dionaea_install_view(page: ft.Page):
         alignment=ft.alignment.center,
         margin=30,
         bgcolor=ft.colors.GREY_50
+    )
+
+    docuement_row = ft.Row(
+        controls=[
+            ft.ElevatedButton(
+                'Document',
+                icon=ft.icons.HELP,
+                on_click=lambda event: event.page.launch_url('https://dionaea.readthedocs.io/en/latest/introduction.html')
+            )
+        ],
+        alignment=ft.MainAxisAlignment.CENTER,
     )
 
     # 基础镜像是否已构建
@@ -310,6 +389,7 @@ def dionaea_install_view(page: ft.Page):
     controls = [
         title_row,
         desc_container,
+        docuement_row,
         ft.Divider(),
         built_status,
         ft.Divider(),
@@ -337,7 +417,7 @@ def dionaea_install_view(page: ft.Page):
     )
     events = {
         'build': build_image_event,
-        'configure': select_configure,
+        'configure': select_env_configure,
         'stop': stop_event,
         'start': start_event,
         'export_log': export_log,
@@ -365,6 +445,8 @@ def dionaea_install_view(page: ft.Page):
     return ft.Column(
         controls=controls,
         spacing=40,
+        scroll=ft.ScrollMode.AUTO,
+        expand=True,
     )
 
 

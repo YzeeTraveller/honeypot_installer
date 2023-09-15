@@ -7,6 +7,7 @@
 import os
 
 import configparser
+import yaml
 
 
 def get_project_root():
@@ -26,3 +27,17 @@ def read_ini_file(src: str) -> configparser.ConfigParser:
     config = configparser.ConfigParser()
     config.read(src)
     return config
+
+
+def read_yaml_file(src: str):
+    """
+    read_yaml_file
+    :param src:
+    :return:
+    """
+    with open(src, 'r') as stream:
+        try:
+            return yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            print(exc)
+    return None
